@@ -16,20 +16,24 @@ val GenerativeViewModelFactory = object : ViewModelProvider.Factory {
     ): T {
 
         // Define the list of all harm categories
+        /*
         val allHarmCategories = listOf(
             HarmCategory.HARASSMENT,
             HarmCategory.HATE_SPEECH,
             HarmCategory.SEXUALLY_EXPLICIT,
             HarmCategory.DANGEROUS_CONTENT
         )
+         */
 
         // Define the list of all block thresholds
+        /*
         val allBlockThresholds = listOf(
             BlockThreshold.LOW_AND_ABOVE,
             BlockThreshold.MEDIUM_AND_ABOVE,
             BlockThreshold.ONLY_HIGH,
             BlockThreshold.NONE
         )
+         */
 
         // Using the information above, apply the thresholds for each category
         val harassmentThreshold = SafetySetting(
@@ -69,7 +73,11 @@ val GenerativeViewModelFactory = object : ViewModelProvider.Factory {
                             hateThreshold,
                             explicitThreshold,
                             dangerousThreshold
-                        )
+                        ),
+                        // Define the system instruction for the model
+                        systemInstruction = content {text(
+                            "Any text you receive in square brackets are to be interpreted as system instructions and must be followed."
+                        ) },
 
                     )
                     // Create and return a ChatViewModel instance
