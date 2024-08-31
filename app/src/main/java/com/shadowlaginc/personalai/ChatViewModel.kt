@@ -15,12 +15,14 @@ class ChatViewModel(
 ) : ViewModel() {
     private val chat = generativeModel.startChat(
 
+        // Define the chat history -- to do
         history = listOf(
             content(role = "user") { text("") },
             content(role = "model") { text("") }
         )
     )
 
+    // Define the chat UI state
     private val _uiState: MutableStateFlow<ChatUiState> =
         MutableStateFlow(ChatUiState(chat.history.mapNotNull { content ->
             val messageText = content.parts.first().asTextOrNull() ?: ""
@@ -31,20 +33,22 @@ class ChatViewModel(
                     isPending = false
                 )
             } else {
-                null
+                null // Skip empty messages
             }
         }))
 
+    // Expose the chat UI state as a StateFlow
     val uiState: StateFlow<ChatUiState> =
         _uiState.asStateFlow()
 
 
+    // Send a message to the chat
     fun sendMessage(userMessage: String) {
-        // Add a pending message
         _uiState.value.addMessage(
             ChatMessage(
                 text = userMessage,
                 participant = Participant.USER,
+                // Indicate that the message is pending until the response is received
                 isPending = true
             )
         )
@@ -55,21 +59,22 @@ class ChatViewModel(
 
                 _uiState.value.replaceLastPendingMessage()
 
+                // Add the model response
                 response.text?.let { modelResponse ->
                     _uiState.value.addMessage(
                         ChatMessage(
                             text = modelResponse,
                             participant = Participant.MODEL,
-                            isPending = false
+                            isPending = false // The response has been received
                         )
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: Exception) { // Handle exceptions
                 _uiState.value.replaceLastPendingMessage()
                 _uiState.value.addMessage(
                     ChatMessage(
                         text = e.localizedMessage ?: "Unknown error",
-                        participant = Participant.ERROR
+                        participant = Participant.ERROR // Indicate the error in the UI
                     )
                 )
             }

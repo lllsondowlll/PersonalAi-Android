@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 
+// Assign Dark theme colors to template
 private val DarkColorScheme = darkColorScheme(
     primary = primaryDark,
     onPrimary = on_primaryDark,
@@ -22,6 +23,7 @@ private val DarkColorScheme = darkColorScheme(
     background = backgroundDark,
 )
 
+// Assign Light theme colors to template
 private val LightColorScheme = lightColorScheme(
     primary = primaryLight,
     onPrimary = on_primaryLight,
@@ -43,6 +45,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun PersonalAiTheme(
+    // Set to theme based on system preference
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,

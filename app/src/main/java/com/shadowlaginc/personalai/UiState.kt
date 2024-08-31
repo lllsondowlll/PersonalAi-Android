@@ -5,23 +5,15 @@ package com.shadowlaginc.personalai
  */
 sealed interface UiState {
 
-    /**
-     * Empty state when the screen is first shown
-     */
+    // Empty state when the screen is first shown
     data object Initial : UiState
 
-    /**
-     * Still loading
-     */
+    // Still loading
     data object Loading : UiState
 
-    /**
-     * Text has been generated
-     */
+    // Text has been generated
     data class Success(val outputText: String) : UiState
 
-    /**
-     * There was an error generating text
-     */
+    // There was an error generating text
     data class Error(val errorMessage: String) : UiState
 }

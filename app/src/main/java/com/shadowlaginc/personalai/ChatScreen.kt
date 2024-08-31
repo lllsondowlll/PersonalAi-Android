@@ -53,9 +53,11 @@ fun ChatScreen(
     Scaffold(
         bottomBar = {
             MessageInput(
+                // Send a message to the chat
                 onSendMessage = { inputText ->
                     chatViewModel.sendMessage(inputText)
                 },
+                // Reset the scroll position when a new message is sent
                 resetScroll = {
                     coroutineScope.launch {
                         listState.scrollToItem(0)
@@ -68,7 +70,8 @@ fun ChatScreen(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize(),
-            verticalArrangement = Arrangement.Bottom  //Ascending Messages
+            // Align the chat content to the bottom
+            verticalArrangement = Arrangement.Bottom
         ) {
             ChatLogWindow(chatUiState.messages, listState)
         }
@@ -81,6 +84,7 @@ fun ChatLogWindow(
     listState: LazyListState
 ) {
     LazyColumn(
+        // New messages descend, old messages ascend
         reverseLayout = true,
         state = listState
     ) {
@@ -93,6 +97,7 @@ fun ChatLogWindow(
 @Composable
 fun ChatMessageTheme(chatMessage: ChatMessage) {
 
+    // Determine the background color and text color based on the participant
     val isModelMessage = chatMessage.participant == Participant.MODEL ||
             chatMessage.participant == Participant.ERROR
 
@@ -108,6 +113,7 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
         Participant.ERROR -> MaterialTheme.colorScheme.onError
     }
 
+    // Determine the shape and alignment of the chat bubble based on the participant
     val bubbleShape = if (isModelMessage) {
         RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
     } else {
@@ -121,18 +127,21 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
     }
 
     Column(
+        // Align the chat message content to the specified alignment
         horizontalAlignment = horizontalAlignment,
         modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 4.dp) //WAS .padding(8.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
             .fillMaxWidth()
     ) {
         Text(
+            // Display the participant name
             text = chatMessage.participant.name,
-            style = MaterialTheme.typography.bodySmall, //WAS labelMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = textColor,
-            modifier = Modifier.padding(bottom = 4.dp) //WAS .padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+            modifier = Modifier.padding(bottom = 4.dp)
         )
         Row {
+            // Display a loading indicator if the message is pending
             if (chatMessage.isPending) {
                 CircularProgressIndicator(
                     modifier = Modifier
@@ -141,6 +150,7 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
                 )
             }
             BoxWithConstraints {
+                // Display the chat message content
                 Card(
                     colors = CardDefaults.cardColors(containerColor = backgroundColor),
                     shape = bubbleShape,
@@ -162,26 +172,32 @@ fun MessageInput(
     onSendMessage: (String) -> Unit,
     resetScroll: () -> Unit = {}
 ) {
+    // Save draft of the user's message
     var userMessage by rememberSaveable { mutableStateOf("") }
 
     Card(
+        // Display the message input field
         modifier = Modifier
             .fillMaxWidth()
             .padding(0.dp),
-        shape = RoundedCornerShape(50.dp), // Make the card rounded (pill-shaped)
+        // Apply rounded corners
+        shape = RoundedCornerShape(50.dp),
     ) {
         Row(modifier = Modifier) {
             TextField(
                 value = userMessage,
+                // Display a hint -- Enter a message
                 placeholder = { Text(stringResource(R.string.chat_label)) },
                 onValueChange = { userMessage = it },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                 ),
+                // Apply styling to the text field
                 modifier = Modifier
                     .weight(0.85f)
                     .padding(0.dp),
-                shape = RoundedCornerShape(48.dp),
+                shape = RoundedCornerShape(50.dp),
+                // Apply colors to the text field based on the theme
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onPrimary,
                     focusedContainerColor = Color.Transparent,
@@ -192,6 +208,7 @@ fun MessageInput(
                 )
 
             )
+            // Send a message when the user clicks the send button
             IconButton(
                 onClick = {
                     if (userMessage.isNotBlank()) {
@@ -206,6 +223,7 @@ fun MessageInput(
                     .fillMaxWidth()
                     .weight(0.15f)
             ) {
+                // Display the send icon
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
                     contentDescription = stringResource(R.string.action_send),
