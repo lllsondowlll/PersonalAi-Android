@@ -8,7 +8,7 @@
 6. Paste your API key into the`local.properties` file under the populated `sdk.dir` like so: 
 ```
 sdk.dir=/path/to/your/android_studio
-apiKey=YOUR_API_KEY_HERE`
+apiKey=YOUR_API_KEY_HERE
 ```
 7. Run the app. Note: Anything typed in square brackets [You bark like a dog] will override the model's system instructions dynamically.
 8. For detailed instructions, try the
