@@ -3,4 +3,6 @@
     <string name="action_go">Go</string>
     <string name="chat_label">Type a message</string>
     <string name="action_send">Send</string>
+    <string name="action_activate_chat">Voice Chat</string>
+    <string name="voice_input">Voice</string>
 </resources>

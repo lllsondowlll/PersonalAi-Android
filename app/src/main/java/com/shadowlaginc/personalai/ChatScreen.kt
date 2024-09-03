@@ -36,15 +36,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 
 @Composable
 fun ChatScreen(
-    chatViewModel: ChatViewModel = viewModel(factory = GenerativeViewModelFactory)
+    chatViewModel: ChatViewModel = viewModel(factory = GenerativeViewModelFactory),
+    navController: NavController = rememberNavController()
 ) {
     val chatUiState by chatViewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -53,15 +57,18 @@ fun ChatScreen(
     Scaffold(
         bottomBar = {
             MessageInput(
-                // Send a message to the chat
+                chatUiState = chatUiState,
                 onSendMessage = { inputText ->
                     chatViewModel.sendMessage(inputText)
+                    chatUiState.updateTextFieldEmptyState(true)
                 },
-                // Reset the scroll position when a new message is sent
                 resetScroll = {
                     coroutineScope.launch {
                         listState.scrollToItem(0)
                     }
+                },
+                onVoiceButtonClicked = {
+                    navController.navigate("voice")
                 }
             )
         }
@@ -70,7 +77,6 @@ fun ChatScreen(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize(),
-            // Align the chat content to the bottom
             verticalArrangement = Arrangement.Bottom
         ) {
             ChatLogWindow(chatUiState.messages, listState)
@@ -84,7 +90,6 @@ fun ChatLogWindow(
     listState: LazyListState
 ) {
     LazyColumn(
-        // New messages descend, old messages ascend
         reverseLayout = true,
         state = listState
     ) {
@@ -96,8 +101,6 @@ fun ChatLogWindow(
 
 @Composable
 fun ChatMessageTheme(chatMessage: ChatMessage) {
-
-    // Determine the background color and text color based on the participant
     val isModelMessage = chatMessage.participant == Participant.MODEL ||
             chatMessage.participant == Participant.ERROR
 
@@ -113,7 +116,6 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
         Participant.ERROR -> MaterialTheme.colorScheme.onError
     }
 
-    // Determine the shape and alignment of the chat bubble based on the participant
     val bubbleShape = if (isModelMessage) {
         RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
     } else {
@@ -127,21 +129,18 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
     }
 
     Column(
-        // Align the chat message content to the specified alignment
         horizontalAlignment = horizontalAlignment,
         modifier = Modifier
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .fillMaxWidth()
     ) {
         Text(
-            // Display the participant name
             text = chatMessage.participant.name,
             style = MaterialTheme.typography.bodySmall,
             color = textColor,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Row {
-            // Display a loading indicator if the message is pending
             if (chatMessage.isPending) {
                 CircularProgressIndicator(
                     modifier = Modifier
@@ -150,7 +149,6 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
                 )
             }
             BoxWithConstraints {
-                // Display the chat message content
                 Card(
                     colors = CardDefaults.cardColors(containerColor = backgroundColor),
                     shape = bubbleShape,
@@ -169,35 +167,34 @@ fun ChatMessageTheme(chatMessage: ChatMessage) {
 
 @Composable
 fun MessageInput(
+    chatUiState: ChatUiState,
     onSendMessage: (String) -> Unit,
-    resetScroll: () -> Unit = {}
+    resetScroll: () -> Unit = {},
+    onVoiceButtonClicked: () -> Unit
 ) {
-    // Save draft of the user's message
     var userMessage by rememberSaveable { mutableStateOf("") }
 
     Card(
-        // Display the message input field
         modifier = Modifier
             .fillMaxWidth()
             .padding(0.dp),
-        // Apply rounded corners
         shape = RoundedCornerShape(50.dp),
     ) {
         Row(modifier = Modifier) {
             TextField(
                 value = userMessage,
-                // Display a hint -- Enter a message
                 placeholder = { Text(stringResource(R.string.chat_label)) },
-                onValueChange = { userMessage = it },
+                onValueChange = {
+                    userMessage = it
+                    chatUiState.updateTextFieldEmptyState(it.isBlank())
+                },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                 ),
-                // Apply styling to the text field
                 modifier = Modifier
                     .weight(0.85f)
                     .padding(0.dp),
                 shape = RoundedCornerShape(50.dp),
-                // Apply colors to the text field based on the theme
                 colors = TextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onPrimary,
                     focusedContainerColor = Color.Transparent,
@@ -206,29 +203,56 @@ fun MessageInput(
                     unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
             )
-            // Send a message when the user clicks the send button
-            IconButton(
-                onClick = {
-                    if (userMessage.isNotBlank()) {
-                        onSendMessage(userMessage)
-                        userMessage = ""
-                        resetScroll()
+
+            // Determine the button state based on isTextFieldEmpty
+            val buttonState = if (chatUiState.isTextFieldEmpty) {
+                ChatUiState.ButtonState.VOICE
+            } else {
+                ChatUiState.ButtonState.SEND
+            }
+
+            // Render the appropriate button based on buttonState
+            when (buttonState) {
+                ChatUiState.ButtonState.VOICE -> {
+                    IconButton(
+                        onClick = {
+                            onVoiceButtonClicked()
+                        },
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .align(Alignment.CenterVertically)
+                            .fillMaxWidth()
+                            .weight(0.15f)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.gemini_voice),
+                            contentDescription = stringResource(R.string.action_activate_chat),
+                            modifier = Modifier
+                        )
                     }
-                },
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .align(Alignment.CenterVertically)
-                    .fillMaxWidth()
-                    .weight(0.15f)
-            ) {
-                // Display the send icon
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = stringResource(R.string.action_send),
-                    modifier = Modifier
-                )
+                }
+
+                ChatUiState.ButtonState.SEND -> {
+                    IconButton(
+                        onClick = {
+                            onSendMessage(userMessage)
+                            userMessage = ""
+                            resetScroll()
+                        },
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .align(Alignment.CenterVertically)
+                            .fillMaxWidth()
+                            .weight(0.15f)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.action_send),
+                            modifier = Modifier
+                        )
+                    }
+                }
             }
         }
     }

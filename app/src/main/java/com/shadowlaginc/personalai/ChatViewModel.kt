@@ -63,7 +63,7 @@ class ChatViewModel(
                 response.text?.let { modelResponse ->
                     _uiState.value.addMessage(
                         ChatMessage(
-                            text = modelResponse,
+                            text = modelResponse.trimEnd(),
                             participant = Participant.MODEL,
                             isPending = false // The response has been received
                         )
