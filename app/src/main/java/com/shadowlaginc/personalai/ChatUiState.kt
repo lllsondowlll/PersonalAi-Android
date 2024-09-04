@@ -1,3 +1,4 @@
+
 package com.shadowlaginc.personalai
 
 import androidx.compose.runtime.getValue
@@ -40,4 +41,3 @@ class ChatUiState(
         VOICE, SEND
     }
 }
-

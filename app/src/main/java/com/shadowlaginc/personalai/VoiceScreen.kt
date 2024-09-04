@@ -1,7 +1,12 @@
 package com.shadowlaginc.personalai
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -17,23 +22,99 @@ import androidx.navigation.NavController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VoiceScreen(navController: NavController) {
-    var isRecording by remember { mutableStateOf(false) }
+fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
+    val context = LocalContext.current
+    var isRecording by remember { mutableStateOf(true) } // Controls whether listening is active
     var recognizedText by remember { mutableStateOf("") }
+    var isPaused by remember { mutableStateOf(false) } // Controls if the app is paused by the user
+    val uiState by chatViewModel.uiState.collectAsState()
+    val latestMessage = uiState.messages.lastOrNull { it.participant == Participant.MODEL }?.text ?: ""
+
+    // Check if speech recognition is available
+    val isSpeechRecognitionAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
 
     // Request microphone permission
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted: Boolean ->
             if (isGranted) {
-                // Permission granted, start recording
                 isRecording = true
             } else {
-                // Permission denied, handle accordingly (e.g., show a message)
-                navController.popBackStack() // Go back to the previous screen
+                navController.popBackStack() // Go back to the previous screen if permission is denied
             }
         }
     )
+
+    // Function to manage speech recognition
+    @Composable
+    fun manageSpeechRecognition(isRecording: Boolean, isPaused: Boolean, recognitionListener: RecognitionListener) {
+        if (isRecording && !isPaused) {
+            val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // Prefer offline recognition
+            }
+            speechRecognizer.setRecognitionListener(recognitionListener)
+            speechRecognizer.startListening(intent)
+
+            // Cleanup on disposal
+            DisposableEffect(Unit) {
+                onDispose {
+                    speechRecognizer.stopListening()
+                    speechRecognizer.destroy()
+                }
+            }
+        }
+    }
+
+    // Speech recognition listener
+    val recognitionListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {
+            recognizedText = "Ready for speech..."
+        }
+
+        override fun onBeginningOfSpeech() {
+            recognizedText = "Listening..."
+        }
+
+        override fun onRmsChanged(rmsdB: Float) {}
+
+        override fun onBufferReceived(buffer: ByteArray?) {}
+
+        override fun onEndOfSpeech() {
+            recognizedText = "Processing..."
+        }
+
+        override fun onError(error: Int) {
+            recognizedText = "Error: $error"
+        }
+
+        override fun onResults(results: Bundle?) {
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            recognizedText = matches?.getOrNull(0) ?: "No results found."
+
+            // Automatically send the message after recognizing speech
+            if (recognizedText.isNotBlank()) {
+                chatViewModel.sendMessage(recognizedText)
+                isRecording = false // Stop listening until the model has responded
+            }
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {}
+
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    // Manage speech recognition based on isRecording and isPaused
+    manageSpeechRecognition(isRecording, isPaused, recognitionListener)
+
+    // Restart listening when the model responds
+    LaunchedEffect(latestMessage) {
+        if (latestMessage.isNotBlank() && !isPaused) {
+            isRecording = true // Restart speech recognition when the model responds
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -49,28 +130,23 @@ fun VoiceScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            if (isRecording) {
-                // TODO: Implement speech recognition UI and logic here
-                Text("Recording... (Placeholder)")
-                Text("Recognized text: $recognizedText")
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { isRecording = false }) {
-                    Text("Stop Recording")
-                }
+            if (!isSpeechRecognitionAvailable) {
+                Text("Speech recognition is not available on this device.")
             } else {
-                // Check for permission and request if needed
-                if (ContextCompat.checkSelfPermission(
-                        LocalContext.current,
-                        Manifest.permission.RECORD_AUDIO
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    Button(onClick = { isRecording = true }) {
-                        Text("Start Recording")
-                    }
-                } else {
-                    Button(onClick = { launcher.launch(Manifest.permission.RECORD_AUDIO) }) {
-                        Text("Request Microphone Permission")
-                    }
+                // Display the recognized text
+                Text("Recognized text: $recognizedText")
+
+                // Display the latest message from the model
+                Text("Model: $latestMessage")
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Pause/Resume button to control the hands-free flow
+                Button(onClick = {
+                    isPaused = !isPaused
+                    isRecording = !isPaused // If paused, stop recording; if resumed, start recording
+                }) {
+                    Text(if (isPaused) "Resume" else "Pause")
                 }
             }
         }
