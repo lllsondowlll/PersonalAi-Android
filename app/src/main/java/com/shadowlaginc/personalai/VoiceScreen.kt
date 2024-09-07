@@ -32,6 +32,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import android.content.Context
+import android.media.AudioManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +60,24 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
         }
     )
 
+    fun muteSystemSounds(context: Context) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_ALARM, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+    }
+
+    fun unmuteSystemSounds(context: Context) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_ALARM, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+    }
+
     // Function to manage speech recognition
     @Composable
     fun manageSpeechRecognition(isRecording: Boolean, isPaused: Boolean, recognitionListener: RecognitionListener) {
@@ -67,8 +87,8 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // Prefer offline recognition
-
             }
+
             speechRecognizer.setRecognitionListener(recognitionListener)
             speechRecognizer.startListening(intent)
 
@@ -77,6 +97,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 onDispose {
                     speechRecognizer.stopListening()
                     speechRecognizer.destroy()
+                    unmuteSystemSounds(context)
                 }
             }
         }
@@ -85,10 +106,12 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     // Speech recognition listener
     val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            recognizedText = "Ready for speech..."
+            recognizedText = "Listening..."
+            muteSystemSounds(context)
         }
 
         override fun onBeginningOfSpeech() {
+            //TODO("Not yet implemented")
             recognizedText = "Listening..."
         }
 
@@ -98,14 +121,19 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
         override fun onEndOfSpeech() {
             recognizedText = "Processing..."
+            unmuteSystemSounds(context)
         }
 
+        //Continuous Text to Speech handling
         override fun onError(error: Int) {
-            recognizedText = "Error: $error"
-            if (error == SpeechRecognizer.ERROR_NO_MATCH) {
-                // Treat timeout like a pause and resume
-                isRecording = false
-                isRecording = true
+            when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    isRecording = false
+                    isRecording = true
+                }
+                else -> {
+                    recognizedText = "Error: $error"
+                }
             }
         }
 
@@ -153,7 +181,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 Text("Speech recognition is not available on this device.")
             } else {
                 // Display the recognized text
-                Text("Recognized text: $recognizedText")
+                Text("User: $recognizedText")
 
                 // Display the latest message from the model
                 Text("Model: $latestMessage")

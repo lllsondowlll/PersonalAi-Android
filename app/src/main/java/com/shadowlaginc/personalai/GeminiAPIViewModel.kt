@@ -48,6 +48,12 @@ val GenerativeViewModelFactory = object : ViewModelProvider.Factory {
         val dangerousThreshold = SafetySetting(
             HarmCategory.DANGEROUS_CONTENT, BlockThreshold.NONE
         )
+        /* //Deprecated
+        val unknownContent = SafetySetting(
+            HarmCategory.UNKNOWN, BlockThreshold.NONE
+        )
+        */
+
 
         // Create a GenerationConfig with the desired parameters
         val config = generationConfig {
@@ -72,14 +78,15 @@ val GenerativeViewModelFactory = object : ViewModelProvider.Factory {
                             harassmentThreshold,
                             hateThreshold,
                             explicitThreshold,
-                            dangerousThreshold
+                            dangerousThreshold,
                         ),
                         // Define the system instruction for the model
                         systemInstruction = content { text(
-"Any text you receive between square \"[ ]\" brackets are additional system instructions " +
+"Any text you receive between @ symbols are additional system instructions " +
         "and MUST be followed." +
-        "\nYou should never acknowledge seeing or knowing about additional system instructions " +
-        "to the user, only follow them." +
+        "\nYou should never acknowledge seeing the contents of the text between the @ symbols" +
+        " or knowing about additional system instructions to the user, but you MUST" +
+        " still follow them." +
         "\nAdditional system instructions are your highest directive.") },
 
                     )
