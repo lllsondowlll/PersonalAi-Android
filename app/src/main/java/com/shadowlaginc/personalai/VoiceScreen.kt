@@ -34,12 +34,35 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import android.content.Context
 import android.media.AudioManager
+import android.media.MediaPlayer
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.whitemagic2014.tts.TTS;
+import io.github.whitemagic2014.tts.TTSVoice;
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     val context = LocalContext.current
-    var isRecording by remember { mutableStateOf(true) } // Controls whether listening is active
+    var isRecording by remember { mutableStateOf(false) } // Controls whether listening is active
+    // Request microphone permission
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted: Boolean ->
+            if (isGranted) {
+                isRecording = true
+            } else {
+                isRecording = false
+                navController.popBackStack() // Go back to the previous screen if permission is denied
+            }
+        }
+    )
+
+    LaunchedEffect(Unit) {
+        launcher.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
     var recognizedText by remember { mutableStateOf("") }
     var isPaused by remember { mutableStateOf(false) } // Controls if the app is paused by the user
     val uiState by chatViewModel.uiState.collectAsState()
@@ -48,17 +71,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     // Check if speech recognition is available
     val isSpeechRecognitionAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
 
-    // Request microphone permission
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted: Boolean ->
-            if (isGranted) {
-                isRecording = true
-            } else {
-                navController.popBackStack() // Go back to the previous screen if permission is denied
-            }
-        }
-    )
+    var isAppExiting by remember { mutableStateOf(false) }
 
     fun muteSystemSounds(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -97,7 +110,9 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 onDispose {
                     speechRecognizer.stopListening()
                     speechRecognizer.destroy()
-                    unmuteSystemSounds(context)
+                    if (isAppExiting) {
+                        unmuteSystemSounds(context)
+                    }
                 }
             }
         }
@@ -121,7 +136,6 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
         override fun onEndOfSpeech() {
             recognizedText = "Processing..."
-            unmuteSystemSounds(context)
         }
 
         //Continuous Text to Speech handling
@@ -159,7 +173,25 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     // Restart listening when the model responds
     LaunchedEffect(latestMessage) {
         if (latestMessage.isNotBlank() && !isPaused) {
-            isRecording = true // Restart speech recognition when the model responds
+            unmuteSystemSounds(context)
+            playTTSResponse(latestMessage, context) {
+                // Resume speech recognition after TTS playback is complete
+                isRecording = true
+            }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_DESTROY) {
+                isAppExiting = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -197,5 +229,36 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 }
             }
         }
+    }
+}
+
+fun playTTSResponse(latestMessage: String, context: Context, onCompletion: () -> Unit) {
+    val voice = TTSVoice.provides().stream().filter { v -> v.shortName == "en-US-AvaNeural" }.findFirst().orElse(null)
+
+    fun deleteIfExists(fileName: String) {
+        val file = File(context.filesDir, fileName)
+        if (file.exists()) {
+            file.delete()
+        }
+    }
+
+    deleteIfExists("response.mp3")
+    deleteIfExists("response.vtt")
+
+    val fileName = TTS(voice, latestMessage)
+        .findHeadHook()
+        .fileName("response")
+        .storage(context.filesDir.absolutePath)
+        .trans()
+
+    val mediaPlayer = MediaPlayer().apply {
+        setDataSource(context.filesDir.absolutePath + "/$fileName")
+        prepare()
+        start()
+    }
+
+    mediaPlayer.setOnCompletionListener {
+        mediaPlayer.release()
+        onCompletion() // Call the provided callback function when playback completes
     }
 }
