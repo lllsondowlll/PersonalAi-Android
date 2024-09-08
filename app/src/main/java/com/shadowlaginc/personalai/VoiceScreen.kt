@@ -94,6 +94,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     // Function to manage speech recognition
     @Composable
     fun manageSpeechRecognition(isRecording: Boolean, isPaused: Boolean, recognitionListener: RecognitionListener) {
+        muteSystemSounds(context)
         if (isRecording && !isPaused) {
             val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -122,7 +123,6 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
             recognizedText = "Listening..."
-            muteSystemSounds(context)
         }
 
         override fun onBeginningOfSpeech() {
