@@ -1,6 +1,9 @@
 package com.shadowlaginc.personalai
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -31,22 +34,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import android.content.Context
-import android.media.AudioManager
-import android.media.MediaPlayer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.whitemagic2014.tts.TTS;
-import io.github.whitemagic2014.tts.TTSVoice;
+import androidx.navigation.NavController
+import io.github.whitemagic2014.tts.TTS
+import io.github.whitemagic2014.tts.TTSVoice
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     val context = LocalContext.current
     var isRecording by remember { mutableStateOf(false) } // Controls whether listening is active
+
     // Request microphone permission
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -63,10 +68,12 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     LaunchedEffect(Unit) {
         launcher.launch(android.Manifest.permission.RECORD_AUDIO)
     }
+
     var recognizedText by remember { mutableStateOf("") }
     var isPaused by remember { mutableStateOf(false) } // Controls if the app is paused by the user
     val uiState by chatViewModel.uiState.collectAsState()
-    val latestMessage = uiState.messages.lastOrNull { it.participant == Participant.MODEL }?.text ?: ""
+    val latestMessage =
+        uiState.messages.lastOrNull { it.participant == Participant.MODEL }?.text ?: ""
 
     // Check if speech recognition is available
     val isSpeechRecognitionAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
@@ -75,7 +82,11 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
     fun muteSystemSounds(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustStreamVolume(
+            AudioManager.STREAM_NOTIFICATION,
+            AudioManager.ADJUST_MUTE,
+            0
+        )
         audioManager.adjustStreamVolume(AudioManager.STREAM_ALARM, AudioManager.ADJUST_MUTE, 0)
         audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
         audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_MUTE, 0)
@@ -84,7 +95,11 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
     fun unmuteSystemSounds(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustStreamVolume(
+            AudioManager.STREAM_NOTIFICATION,
+            AudioManager.ADJUST_UNMUTE,
+            0
+        )
         audioManager.adjustStreamVolume(AudioManager.STREAM_ALARM, AudioManager.ADJUST_UNMUTE, 0)
         audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
         audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_UNMUTE, 0)
@@ -93,12 +108,19 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
     // Function to manage speech recognition
     @Composable
-    fun manageSpeechRecognition(isRecording: Boolean, isPaused: Boolean, recognitionListener: RecognitionListener) {
+    fun manageSpeechRecognition(
+        isRecording: Boolean,
+        isPaused: Boolean,
+        recognitionListener: RecognitionListener
+    ) {
         muteSystemSounds(context)
         if (isRecording && !isPaused) {
             val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true) // Prefer offline recognition
             }
@@ -126,7 +148,6 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
         }
 
         override fun onBeginningOfSpeech() {
-            //TODO("Not yet implemented")
             recognizedText = "Listening..."
         }
 
@@ -138,13 +159,13 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
             recognizedText = "Processing..."
         }
 
-        //Continuous Text to Speech handling
         override fun onError(error: Int) {
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                     isRecording = false
                     isRecording = true
                 }
+
                 else -> {
                     recognizedText = "Error: $error"
                 }
@@ -175,7 +196,6 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
         if (latestMessage.isNotBlank() && !isPaused) {
             unmuteSystemSounds(context)
             playTTSResponse(latestMessage, context) {
-                // Resume speech recognition after TTS playback is complete
                 isRecording = true
             }
         }
@@ -223,7 +243,8 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
                 // Pause/Resume button to control the hands-free flow
                 Button(onClick = {
                     isPaused = !isPaused
-                    isRecording = !isPaused // If paused, stop recording; if resumed, start recording
+                    isRecording =
+                        !isPaused // If paused, stop recording; if resumed, start recording
                 }) {
                     Text(if (isPaused) "Resume" else "Pause")
                 }
@@ -232,33 +253,62 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     }
 }
 
-fun playTTSResponse(latestMessage: String, context: Context, onCompletion: () -> Unit) {
-    val voice = TTSVoice.provides().stream().filter { v -> v.shortName == "en-US-AvaNeural" }.findFirst().orElse(null)
+suspend fun playTTSResponse(latestMessage: String, context: Context, onCompletion: () -> Unit) {
+    val voice =
+        TTSVoice.provides().stream().filter { v -> v.shortName == "en-US-AvaNeural" }.findFirst()
+            .orElse(null)
 
-    fun deleteIfExists(fileName: String) {
-        val file = File(context.filesDir, fileName)
-        if (file.exists()) {
-            file.delete()
+    suspend fun deleteIfExists(fileName: String) {
+        withContext(Dispatchers.IO) {
+            val file = File(context.filesDir, fileName)
+            if (file.exists()) {
+                file.delete()
+            }
         }
     }
 
-    deleteIfExists("response.mp3")
-    deleteIfExists("response.vtt")
+    // Perform file deletion on IO thread
+    withContext(Dispatchers.IO) {
+        deleteIfExists("response.mp3")
+        deleteIfExists("response.vtt")
+    }
 
-    val fileName = TTS(voice, latestMessage)
-        .findHeadHook()
-        .fileName("response")
-        .storage(context.filesDir.absolutePath)
-        .trans()
+    // Perform TTS and media playback on IO thread
+    withContext(Dispatchers.IO) {
+        val fileName = TTS(voice, latestMessage)
+            .findHeadHook()
+            .fileName("response")
+            .storage(context.filesDir.absolutePath)
+            .trans()
 
+        // Play media file asynchronously
+        playMediaAsync(context.filesDir.absolutePath + "/$fileName")
+
+        // Ensure onCompletion is called on the main thread
+        withContext(Dispatchers.Main) {
+            onCompletion()
+        }
+    }
+}
+
+// A helper function to play media in a coroutine-friendly way
+suspend fun playMediaAsync(filePath: String) = suspendCancellableCoroutine<Unit> { continuation ->
     val mediaPlayer = MediaPlayer().apply {
-        setDataSource(context.filesDir.absolutePath + "/$fileName")
+        setDataSource(filePath)
         prepare()
         start()
     }
 
     mediaPlayer.setOnCompletionListener {
         mediaPlayer.release()
-        onCompletion() // Call the provided callback function when playback completes
+        continuation.resume(Unit) // Resume coroutine when playback is complete
+    }
+
+    // Ensure mediaPlayer is released if coroutine is cancelled
+    continuation.invokeOnCancellation {
+        if (mediaPlayer.isPlaying) {
+            mediaPlayer.stop()
+        }
+        mediaPlayer.release()
     }
 }

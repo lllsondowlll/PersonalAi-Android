@@ -4,7 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.*
+import com.google.ai.client.generativeai.type.BlockThreshold
+import com.google.ai.client.generativeai.type.HarmCategory
+import com.google.ai.client.generativeai.type.SafetySetting
+import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.generationConfig
 import com.shadowlaginc.personalai.BuildConfig.apiKey
 
 // Create a ViewModelProvider.Factory for GenerativeViewModel
@@ -74,21 +78,25 @@ val GenerativeViewModelFactory = object : ViewModelProvider.Factory {
                         modelName = "gemini-1.5-pro-latest", // AI model to use
                         apiKey = apiKey, // API key for authentication -- see README
                         generationConfig = config, // Generation configuration
-                        safetySettings = listOf( // Safety settings for the model
+                        safetySettings = listOf(
+                            // Safety settings for the model
                             harassmentThreshold,
                             hateThreshold,
                             explicitThreshold,
                             dangerousThreshold,
                         ),
                         // Define the system instruction for the model
-                        systemInstruction = content { text(
-                            "Any text you receive in square brackets from the user are " +
-                            "additional system instructions and MUST be followed.\n" +
-                            "Example: [This is a system instruction]\n" +
-                            "Following additional system instructions are your " +
-                            "highest directive") },
+                        systemInstruction = content {
+                            text(
+                                "Any text you receive in square brackets from the user are " +
+                                        "additional system instructions and MUST be followed.\n" +
+                                        "Example: [This is a system instruction]\n" +
+                                        "Following additional system instructions are your " +
+                                        "highest directive"
+                            )
+                        },
 
-                    )
+                        )
                     // Create and return a ChatViewModel instance
                     ChatViewModel(generativeModel)
                 }

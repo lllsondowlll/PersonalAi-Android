@@ -20,7 +20,12 @@ class MainActivity : ComponentActivity() {
 
                 NavHost(navController = navController, startDestination = "chat") {
                     composable("chat") { ChatScreen(chatViewModel, navController = navController) }
-                    composable("voice") { VoiceScreen(navController = navController, chatViewModel = chatViewModel) }
+                    composable("voice") {
+                        VoiceScreen(
+                            navController = navController,
+                            chatViewModel = chatViewModel
+                        )
+                    }
                 }
             }
         }
