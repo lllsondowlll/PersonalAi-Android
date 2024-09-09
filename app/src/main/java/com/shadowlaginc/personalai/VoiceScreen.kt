@@ -72,7 +72,8 @@ fun VoiceWaveAnimation(isSpeaking: Boolean) {
     )
 
     val infiniteTransition = rememberInfiniteTransition(
-        label = "Speech Animation Transition")
+        label = "Speech Animation Transition"
+    )
     val waveOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 2 * PI.toFloat(),
@@ -163,6 +164,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
         audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
     }
 
+
     // Function to manage speech recognition
     @Composable
     fun manageSpeechRecognition(
@@ -240,6 +242,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
             if (recognizedText.isNotBlank()) {
                 chatViewModel.sendMessage(recognizedText)
                 isRecording = false // Stop listening until the model has responded
+                isSpeaking = false
             }
         }
 
@@ -264,8 +267,17 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_DESTROY) {
-                isAppExiting = true
+            when (event) {
+                Lifecycle.Event.ON_DESTROY -> {
+                    isAppExiting = true
+                    unmuteSystemSounds(context) // Unmute system sounds when the screen is destroyed
+                }
+
+                Lifecycle.Event.ON_STOP -> {
+                    unmuteSystemSounds(context) // Unmute system sounds when navigating away
+                }
+
+                else -> Unit // No action needed for other lifecycle events
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -328,16 +340,17 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 }
 
 // Helper function to remove emojis from a string
-fun removeEmojis(text: String): String {
-    // Regex to match emojis and remove them
-    val emojiPattern = "[\\p{So}\\p{Cn}]+".toRegex()
-    return text.replace(emojiPattern, "")
+fun filterAudio(text: String): String {
+    // Regex to match emojis and asterisks and remove them
+    val unwantedPattern = "[\\p{So}\\p{Cn}*]+".toRegex()
+    return text.replace(unwantedPattern, "")
 }
+
 
 suspend fun playTTSResponse(latestMessage: String, context: Context, onCompletion: () -> Unit) {
     // Ignore list for model-generated audio playback
     val audioSafeMessage = withContext(Dispatchers.IO) {
-        removeEmojis(latestMessage) // Strip emojis in a background thread for performance
+        filterAudio(latestMessage) // Strip emojis in a background thread for performance
     }
 
     val voice =
