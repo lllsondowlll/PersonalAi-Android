@@ -10,12 +10,23 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +42,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,18 +54,73 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import io.github.whitemagic2014.tts.TTS
 import io.github.whitemagic2014.tts.TTSVoice
-import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.coroutines.resume
+import kotlin.math.PI
+import kotlin.math.sin
+
+@Composable
+fun VoiceWaveAnimation(isSpeaking: Boolean) {
+    // Animation logic
+    val waveHeight by animateFloatAsState(
+        targetValue = if (isSpeaking) 100f else 0f,
+        animationSpec = tween(durationMillis = 600, easing = LinearEasing),
+        label = "Speech Animation Height"
+    )
+
+    val infiniteTransition = rememberInfiniteTransition(
+        label = "Speech Animation Transition")
+    val waveOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2 * PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ), label = "Speech Animation"
+    )
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+    ) {
+        val wavePath = Path()
+        val amplitude = waveHeight
+        val wavelength = size.width / 2f
+
+        wavePath.moveTo(0f, size.height / 2)
+        for (x in 0..size.width.toInt()) {
+            val y =
+                amplitude * sin((x.toFloat() / wavelength) + waveOffset) + (size.height / 2)
+            wavePath.lineTo(x.toFloat(), y)
+        }
+
+        drawPath(
+            path = wavePath,
+            color = Color.Cyan,
+            style = Stroke(width = 4f)
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     val context = LocalContext.current
+    var isSpeaking by remember { mutableStateOf(false) }  // Controls whether user is speaking
     var isRecording by remember { mutableStateOf(false) } // Controls whether listening is active
-
+    val scrollState = rememberScrollState()
+    var recognizedText by remember { mutableStateOf("") }
+    var isPaused by remember { mutableStateOf(false) } // Controls if the app is paused by the user
+    val uiState by chatViewModel.uiState.collectAsState()
+    val latestMessage =
+        uiState.messages.lastOrNull { it.participant == Participant.MODEL }?.text ?: ""
+    // Check if speech recognition is available
+    val isSpeechRecognitionAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    var isAppExiting by remember { mutableStateOf(false) }
     // Request microphone permission
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -64,21 +133,9 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
             }
         }
     )
-
     LaunchedEffect(Unit) {
         launcher.launch(android.Manifest.permission.RECORD_AUDIO)
     }
-
-    var recognizedText by remember { mutableStateOf("") }
-    var isPaused by remember { mutableStateOf(false) } // Controls if the app is paused by the user
-    val uiState by chatViewModel.uiState.collectAsState()
-    val latestMessage =
-        uiState.messages.lastOrNull { it.participant == Participant.MODEL }?.text ?: ""
-
-    // Check if speech recognition is available
-    val isSpeechRecognitionAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
-
-    var isAppExiting by remember { mutableStateOf(false) }
 
     fun muteSystemSounds(context: Context) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -149,6 +206,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
         override fun onBeginningOfSpeech() {
             recognizedText = "Listening..."
+            isSpeaking = true
         }
 
         override fun onRmsChanged(rmsdB: Float) {}
@@ -157,6 +215,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
         override fun onEndOfSpeech() {
             recognizedText = "Processing..."
+            isSpeaking = false
         }
 
         override fun onError(error: Int) {
@@ -168,6 +227,7 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
 
                 else -> {
                     recognizedText = "Error: $error"
+                    isSpeaking = false
                 }
             }
         }
@@ -232,19 +292,33 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
             if (!isSpeechRecognitionAvailable) {
                 Text("Speech recognition is not available on this device.")
             } else {
-                // Display the recognized text
-                Text("User: $recognizedText")
+                // Scrollable section for recognized and model output
+                Column(
+                    modifier = Modifier
+                        .weight(1f) // Allows scrolling to take available vertical space
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 16.dp)
+                ) {
+                    // Display the recognized text
+                    Text("User: $recognizedText")
 
-                // Display the latest message from the model
-                Text("Model: $latestMessage")
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Display the latest message from the model
+                    Text("Model: $latestMessage")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Display your new wave animation
+                VoiceWaveAnimation(isSpeaking = isSpeaking)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Pause/Resume button to control the hands-free flow
                 Button(onClick = {
                     isPaused = !isPaused
-                    isRecording =
-                        !isPaused // If paused, stop recording; if resumed, start recording
+                    isRecording = !isPaused
                 }) {
                     Text(if (isPaused) "Resume" else "Pause")
                 }
@@ -253,7 +327,19 @@ fun VoiceScreen(navController: NavController, chatViewModel: ChatViewModel) {
     }
 }
 
+// Helper function to remove emojis from a string
+fun removeEmojis(text: String): String {
+    // Regex to match emojis and remove them
+    val emojiPattern = "[\\p{So}\\p{Cn}]+".toRegex()
+    return text.replace(emojiPattern, "")
+}
+
 suspend fun playTTSResponse(latestMessage: String, context: Context, onCompletion: () -> Unit) {
+    // Ignore list for model-generated audio playback
+    val audioSafeMessage = withContext(Dispatchers.IO) {
+        removeEmojis(latestMessage) // Strip emojis in a background thread for performance
+    }
+
     val voice =
         TTSVoice.provides().stream().filter { v -> v.shortName == "en-US-AvaNeural" }.findFirst()
             .orElse(null)
@@ -275,7 +361,7 @@ suspend fun playTTSResponse(latestMessage: String, context: Context, onCompletio
 
     // Perform TTS and media playback on IO thread
     withContext(Dispatchers.IO) {
-        val fileName = TTS(voice, latestMessage)
+        val fileName = TTS(voice, audioSafeMessage)  // Use cleanedMessage without emojis for TTS
             .findHeadHook()
             .fileName("response")
             .storage(context.filesDir.absolutePath)
